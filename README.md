@@ -239,7 +239,7 @@ cross-validation scores and test scores.
 
 | Model | Overfit gap | Verdict |
 |---|---|---|
-| LinReg / Ridge | 0.60–0.62% | ✅ No overfitting — if anything, slightly underfitting (high bias, low variance) |
+| LinReg / Ridge | 0.60–0.62% | ✅ No overfitting — if anything, slightly underfitting |
 | XGBoost | 7.69% | ✅ Mild, well-controlled overfitting |
 | GradBoost | 7.90% | ✅ Mild, well-controlled overfitting |
 | Decision Tree | 14.65% | ⚠️ Moderate overfitting |
