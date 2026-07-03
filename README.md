@@ -28,6 +28,7 @@ immo-eliza-ml/
 ├── training.py                  # Main training pipeline
 ├── requirements.txt
 ├── README.md
+├── .gitattributes
 ├── .gitignore
 │
 ├── models/                      # Model class definitions
