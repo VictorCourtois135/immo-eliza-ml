@@ -4,7 +4,7 @@ from utils.cleaning import col_drop, fit_cleaning_stats, apply_cleaning
 from utils.ordinal_encoding import fit_ordinal_medians, apply_ordinal_encoding
 from utils.feature_engineering import engeneering_feature, filter_outliers
 from utils.onehot_encoding import fit_onehot_categories, apply_onehot
-from utils.persistence import saving_models
+from utils.persistence import saving_models, save_preprocessing_artifacts
 from utils.metrics import print_results
 from sklearn.model_selection import train_test_split
 from models.linear_regression import MyLinearRegression
@@ -60,6 +60,8 @@ def main():
     y_train = np.log1p(train_df["price"])
     y_test = np.log1p(test_df["price"])
     
+    print(X_train.shape)
+    
     #Models
     models = {
     "LinReg": MyLinearRegression(X_train, X_test, y_train, y_test),
@@ -69,6 +71,11 @@ def main():
     "RandForest": MyRandomForest(X_train, X_test, y_train, y_test),
     "DecisionTree": MyDecisionTree(X_train, X_test, y_train, y_test),
     }
+    
+    #Saving preprocessing artifacts (needed for predict.py)
+    feature_columns = list(train_df.drop(columns='price').columns)
+    save_preprocessing_artifacts(stats, ordinal_medians, onehot_categories, feature_columns)
+
 
     #Savinig into models_trained
     saving_models(models)
