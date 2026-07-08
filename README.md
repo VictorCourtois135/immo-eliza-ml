@@ -11,25 +11,30 @@ energy performance, etc.).
 Six regression models were trained and compared, from a simple linear 
 baseline to more complex ensemble methods (Random Forest, Gradient 
 Boosting, XGBoost), in order to identify the best-performing approach 
-for this dataset.
+for this dataset. The final XGBoost model, along with the full 
+preprocessing pipeline, is served through a standalone `predict.py` 
+script capable of predicting the price of a brand new, unseen 
+property.
 
 ## 🎯 Objectives
 
 - Preprocess real-world, messy real estate data for machine learning
-- Build a reusable preprocessing pipeline (fit on train, applied identically to test)
+- Build a reusable preprocessing pipeline (fit on train, applied identically to test and to new data)
 - Train and compare several regression models
 - Evaluate model performance using appropriate metrics
 - Detect and reduce overfitting through hyperparameter tuning
+- Provide a standalone prediction script for new properties
 
 ## 📂 Repository Structure
 
 ```
 immo-eliza-ml/
 ├── training.py                  # Main training pipeline
-├── requirements.txt
+├── predict.py                   # Predicts the price of a new property
 ├── README.md
 ├── .gitattributes
 ├── .gitignore
+├── requirements.txt
 │
 ├── models/                      # Model class definitions
 │   ├── model_template.py        # ModelTemplate (shared metrics logic)
@@ -40,13 +45,17 @@ immo-eliza-ml/
 │   ├── gradient_boosting.py
 │   └── xgboost.py
 │
-├── models_trained/               # Saved trained models 
+├── models_trained/               # Saved trained models & preprocessing artifacts
 │   ├── LinReg.pkl
 │   ├── Ridge.pkl
 │   ├── DecisionTree.pkl
 │   ├── RandForest.pkl
 │   ├── GradBoost.pkl
-│   └── XGBoost.pkl
+│   ├── XGBoost.pkl
+│   ├── cleaning_stats.pkl        # Imputation medians, fitted on train only
+│   ├── ordinal_medians.pkl       # EPC / building state fallback medians
+│   ├── onehot_categories.pkl     # One-hot category lists, fitted on train only
+│   └── feature_columns.pkl       # Exact training feature column order
 │
 ├── dataset/
 │   └── properties_final_irene.csv
@@ -75,7 +84,7 @@ pip install -r requirements.txt
 
 ## 🚀 Usage
 
-Train all models and print the comparison report:
+### Training all models
 
 ```bash
 python training.py
@@ -87,8 +96,49 @@ This will:
 3. Fit preprocessing statistics on the training set only
 4. Apply preprocessing consistently to both sets
 5. Train 6 models
-6. Save trained models 
+6. Save trained models and all preprocessing artifacts to `models_trained/`
 7. Print a full metrics comparison table
+
+### Predicting the price of a new property
+
+```bash
+python predict.py
+```
+
+This loads the trained XGBoost model along with the saved preprocessing 
+artifacts (imputation statistics, ordinal encoding medians, one-hot 
+categories, and the exact training feature column order), applies the 
+exact same preprocessing pipeline used during training to a new 
+property, and prints the predicted price.
+
+`predict.py` reuses the same preprocessing functions from `utils/` 
+(`apply_cleaning`, `apply_ordinal_encoding`, `engeneering_feature`, 
+`apply_onehot`) — no logic is duplicated. This guarantees that a new 
+property is transformed in exactly the same way as the training data, 
+preventing any train/inference mismatch.
+
+Edit the `build_new_data_input()` function in `predict.py` to test 
+different property characteristics:
+
+```python
+data = {
+    "latitude": 50.8503,
+    "longitude": 4.3517,
+    "property_type": "House",
+    "property_subtype": "Villa",
+    "region": "Brussels",
+    "province": "Brussels",
+    "living_area_m2": 180.0,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "facades": 4,
+    "building_year": 1995,
+    "garden_area_m2": 120.0,
+    "has_garden": 1,
+    "state_of_the_building": "Normal",
+    "epc_score": "C",
+}
+```
 
 ## 🧠 Methodology
 
@@ -112,6 +162,8 @@ This will:
   filled with an explicit `"Unknown"` category
 - For every imputed column, a binary `<column>_was_missing` flag was 
   added, allowing the model to learn from missingness itself
+- All imputation statistics are **saved as artifacts** so they can be 
+  reused identically at inference time in `predict.py`
 
 ### 3. Outlier Filtering
 
@@ -141,14 +193,20 @@ non-linear relationships (23 new features):
 - Categorical features (`property_type`, `property_subtype`, 
   `region`, `province`) were one-hot encoded
 - Categories were extracted from the training set only; any category 
-  unseen in the test set is safely encoded as all-zero (baseline)
+  unseen in the test set (or at inference time) is safely encoded as 
+  all-zero (baseline)
+- The exact training column order is saved as an artifact 
+  (`feature_columns.pkl`) and enforced via `.reindex()` at inference 
+  time, to guarantee the feature vector fed to the model is always 
+  correctly aligned, regardless of which categories appear in a new, 
+  single-row prediction
 
 ### 7. Target Transformation
 
 - The target variable (`price`) was log-transformed (`log1p`) before 
   training, to reduce the impact of price skewness and stabilize 
   variance. Predictions are converted back to real prices using 
-  `expm1` before computing evaluation metrics
+  `expm1` before computing evaluation metrics or returning a prediction
 
 ### 8. Feature Scaling
 
@@ -181,6 +239,17 @@ cross-validation scores, an overfitting gap/ratio (train R² − test R²),
 and standard error metrics (MAE, Median AE, MAPE, MSE, RMSE, Max 
 Error, Explained Variance).
 
+### 11. Reusable Preprocessing Pipeline
+
+Every preprocessing step follows a strict **fit / apply** separation:
+a `fit_*` function computes statistics (medians, category lists) 
+**exclusively on the training set**, and a matching `apply_*` function 
+applies those precomputed statistics to any dataframe — train, test, 
+or a brand new single-row property. All fitted artifacts are 
+serialized with `joblib` and reloaded by `predict.py`, ensuring the 
+exact same transformations are applied at inference time, with zero 
+risk of data leakage or logic duplication.
+
 ## 📊 Results
 
 | Metric | LinReg | Ridge | GradBoost | XGBoost | RandForest | DecisionTree |
@@ -210,7 +279,9 @@ a test R² of ~0.80, a MAPE of ~21%, and an RMSE around €117k —
 substantially outperforming every other model on every error metric. 
 The two are almost tied: XGBoost has a very slight edge on MAE, RMSE 
 and Max Error, while Gradient Boosting has a marginally higher R². In 
-practice, the two models are interchangeable in performance.
+practice, the two models are interchangeable in performance. 
+**XGBoost was selected for `predict.py`**, as it offers the best 
+error metrics overall.
 
 **Linear Regression and Ridge underperform clearly** (R² ≈ 0.72, MAPE 
 ≈ 25.6%), confirming that the relationship between property 
@@ -267,8 +338,20 @@ cross-validation scores and test scores.
 
 **Conclusion:** Gradient Boosting and XGBoost are selected as the 
 final models, offering the best trade-off between predictive accuracy 
-and generalization.
+and generalization. XGBoost is the model served by `predict.py`.
 
+## 🛠️ Possible Improvements
+
+- Feature selection based on correlation analysis to reduce 
+  multicollinearity
+- Further reduce Random Forest overfitting (lower `max_depth`, 
+  increase `min_samples_leaf`)
+- Try additional models (SVM, LightGBM, CatBoost) or a stacked 
+  ensemble of GradBoost + XGBoost
+- Expand hyperparameter search space with Bayesian optimization 
+  (e.g. Optuna)
+- Extend `predict.py` to accept multiple properties at once (batch 
+  prediction) instead of a single hardcoded dictionary
 
 ## 👤 Author
 
