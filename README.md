@@ -340,19 +340,6 @@ cross-validation scores and test scores.
 final models, offering the best trade-off between predictive accuracy 
 and generalization. XGBoost is the model served by `predict.py`.
 
-## 🛠️ Possible Improvements
-
-- Feature selection based on correlation analysis to reduce 
-  multicollinearity
-- Further reduce Random Forest overfitting (lower `max_depth`, 
-  increase `min_samples_leaf`)
-- Try additional models (SVM, LightGBM, CatBoost) or a stacked 
-  ensemble of GradBoost + XGBoost
-- Expand hyperparameter search space with Bayesian optimization 
-  (e.g. Optuna)
-- Extend `predict.py` to accept multiple properties at once (batch 
-  prediction) instead of a single hardcoded dictionary
-
 ## 👤 Author
 
 Victor Courtois         
